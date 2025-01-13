@@ -17,16 +17,18 @@ mixin AudioRecorderMixin {
     await recorder.start(config, path: path);
   }
 
+  bool isProcessing = false;
+
   Status get currentState;
 
   List<Uint8List> wholeDataList = [];
   List<Uint8List> listData = [];
   Map<int, List<Uint8List>> mapData = {};
 
-  final StreamController<List<Uint8List>> processStream =
+  final StreamController<List<Uint8List>> processController =
       StreamController<List<Uint8List>>.broadcast();
 
-  Stream<List<Uint8List>> get processData => processStream.stream;
+  Stream<List<Uint8List>> get processStream => processController.stream;
   StreamSubscription<RecordState>? _recordAddSub;
 
   Future<void> recordStream(AudioRecorder recorder, RecordConfig config) async {
@@ -50,18 +52,20 @@ mixin AudioRecorderMixin {
         // print(
         //   recorder.convertBytesToInt16(Uint8List.fromList(data)),
         // );
+        print('currentState: $currentState');
         if (currentState == Status.peak) {
           listData.add(data);
         }
 
         if (currentState == Status.silence) {
-          if(listData.isNotEmpty) {
+          if ((listData.isNotEmpty) && (!isProcessing)) {
+            isProcessing = true;
             int index = mapData.keys.length;
             mapData[index] = listData;
-            processStream.add(listData);
-            listData.clear();
+            processController.add(listData);
           }
         }
+
         //move to listener
         //file.writeAsBytesSync(data, mode: FileMode.append);
       },
@@ -76,8 +80,6 @@ mixin AudioRecorderMixin {
     // );
   }
 
-
-
   Future<String> _getPath() async {
     final dir = await getApplicationDocumentsDirectory();
     return p.join(
@@ -86,4 +88,3 @@ mixin AudioRecorderMixin {
     );
   }
 }
-

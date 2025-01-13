@@ -33,7 +33,7 @@ class _RecorderState extends State<Recorder> with AudioRecorderMixin {
   Amplitude? _amplitude;
 
   double volume = 0.0;
-  double minVolume = -35.0;
+  double minVolume = -30.0;
   String s = '';
 
   @override
@@ -58,27 +58,34 @@ class _RecorderState extends State<Recorder> with AudioRecorderMixin {
     super.initState();
   }
 
-  Future<void> groq(String b) async {
+  Future<void> groq(Uint8List data) async {
+    if(data.isEmpty){
+      return;
+    }
     http.MultipartRequest req = http.MultipartRequest(
       "POST",
       Uri.parse("https://api.groq.com/openai/v1/audio/transcriptions"),
     );
     req.headers['Authorization'] =
-        'Bearer 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';
+        'Bearer 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';
     req.headers["Content-Type"] = 'multipart/form-data';
-    req.files.add(await http.MultipartFile.fromPath(
+    req.files.add(http.MultipartFile.fromBytes(
       'file',
-      b,
+      data,
+      filename: 'au.wav',
     ));
     req.fields["model"] = "whisper-large-v3";
     var response = await req.send();
     response.stream.transform(utf8.decoder).listen((value) {
-      //print(' data ${jsonDecode(value)["text"]}');
+      print(value);
+      print(' data ${jsonDecode(value)["text"]}');
       var txt = '${jsonDecode(value)["text"]}';
       if (txt != 'null') {
         s += txt;
       }
       print('s: $s');
+    }).onError((e, s) {
+      print(e);
     });
   }
 
@@ -88,28 +95,29 @@ class _RecorderState extends State<Recorder> with AudioRecorderMixin {
         converMiliSeconds: 100, //convert every 1 sec
         numChannels: 2);
     String path = '';
-    File? file;
+    //File? file;
 
-    _recordAddSub = processData.listen((data) async {
-      path = await _getPath();
-      print('path: $path');
-
-      file = File(path);
-      //move here
-
-      for (var d in data) {
-        _pcmtowave.run(d);
+    _recordAddSub = processStream.listen((data) async {
+      if (data.isNotEmpty) {
+        path = await _getPath();
+        print('path: $path');
+        //file = File(path);
+        //move here
+        for (var d in data) {
+          _pcmtowave.run(d);
+        }
+        listData.clear();
+        isProcessing = false;
       }
     });
 
     _pcmtowave.convert.listen((data) async {
       //if (file != null) {
-        await file!.writeAsBytes(data, mode: FileMode.append);
-      //}
-
-      //await groq(path);
+      //   await file!.writeAsBytes(data, mode: FileMode.append);
+      //   await groq(path);
+      // }
+      await groq(data);
     });
-    _pcmtowave.dispose();
   }
 
   void onSilence() {
@@ -213,6 +221,8 @@ class _RecorderState extends State<Recorder> with AudioRecorderMixin {
         body: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Text('$s'),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
